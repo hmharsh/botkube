@@ -37,19 +37,6 @@ import (
 	"github.com/infracloudio/botkube/pkg/utils"
 )
 
-var validKubectlCommands = map[string]bool{
-	"api-resources": true,
-	"api-versions":  true,
-	"cluster-info":  true,
-	"describe":      true,
-	"diff":          true,
-	"explain":       true,
-	"get":           true,
-	"logs":          true,
-	"top":           true,
-	"auth":          true,
-}
-
 var validNotifierCommand = map[string]bool{
 	"notifier": true,
 }
@@ -93,6 +80,8 @@ type DefaultExecutor struct {
 	ChannelName      string
 	IsAuthChannel    bool
 	DefaultNamespace string
+	Verbs            []string
+	Resources        []string
 }
 
 // CommandRunner is an interface to run bash commands
@@ -146,7 +135,8 @@ func (action FiltersAction) String() string {
 }
 
 // NewDefaultExecutor returns new Executor object
-func NewDefaultExecutor(msg string, allowkubectl, restrictAccess bool, defaultNamespace, clusterName, channelName string, isAuthChannel bool) Executor {
+func NewDefaultExecutor(msg string, allowkubectl, restrictAccess bool, defaultNamespace,
+	clusterName, channelName string, isAuthChannel bool, verbs []string, resources []string) Executor {
 	return &DefaultExecutor{
 		Message:          msg,
 		AllowKubectl:     allowkubectl,
@@ -155,6 +145,8 @@ func NewDefaultExecutor(msg string, allowkubectl, restrictAccess bool, defaultNa
 		ChannelName:      channelName,
 		IsAuthChannel:    isAuthChannel,
 		DefaultNamespace: defaultNamespace,
+		Verbs:            verbs,
+		Resources:        resources,
 	}
 }
 
@@ -162,7 +154,7 @@ func NewDefaultExecutor(msg string, allowkubectl, restrictAccess bool, defaultNa
 func (e *DefaultExecutor) Execute() string {
 	args := strings.Fields(e.Message)
 
-	if validKubectlCommands[args[0]] {
+	if utils.Contains(e.Verbs, args[0]) && utils.Contains(e.Resources, args[1]) {
 		isClusterNamePresent := strings.Contains(e.Message, "--cluster-name")
 		if !e.AllowKubectl {
 			if isClusterNamePresent && e.ClusterName == utils.GetClusterNameFromKubectlCmd(e.Message) {
