@@ -24,7 +24,7 @@ import (
 
 	"github.com/infracloudio/botkube/pkg/config"
 	"github.com/infracloudio/botkube/pkg/execute"
-	"github.com/infracloudio/botkube/pkg/logging"
+	"github.com/infracloudio/botkube/pkg/log"
 	"github.com/nlopes/slack"
 )
 
@@ -34,12 +34,10 @@ type SlackBot struct {
 	AllowKubectl     bool
 	RestrictAccess   bool
 	ClusterName      string
-	ChannelName      string
+	Accessbindings   []config.Accessbinding
 	SlackURL         string
 	BotID            string
 	DefaultNamespace string
-	Verbs            []string
-	Resources        []string
 }
 
 // slackMessage contains message details to execute command and send back the result
@@ -60,10 +58,8 @@ func NewSlackBot(c *config.Config) Bot {
 		AllowKubectl:     c.Settings.Kubectl.Enabled,
 		RestrictAccess:   c.Settings.Kubectl.RestrictAccess,
 		ClusterName:      c.Settings.ClusterName,
-		ChannelName:      c.Communications.Slack.Channel,
+		Accessbindings:   c.Communications.Slack.Accessbindings,
 		DefaultNamespace: c.Settings.Kubectl.DefaultNamespace,
-		Verbs:            c.Settings.Kubectl.Commands.Verbs,
-		Resources:        c.Settings.Kubectl.Commands.Resources,
 	}
 }
 
@@ -77,7 +73,7 @@ func (b *SlackBot) Start() {
 	} else {
 		authResp, err := api.AuthTest()
 		if err != nil {
-			logging.Logger.Fatal(err)
+			log.Fatal(err)
 		}
 		botID = authResp.UserID
 	}
@@ -88,7 +84,7 @@ func (b *SlackBot) Start() {
 	for msg := range RTM.IncomingEvents {
 		switch ev := msg.Data.(type) {
 		case *slack.ConnectedEvent:
-			logging.Logger.Info("BotKube connected to Slack!")
+			log.Info("BotKube connected to Slack!")
 
 		case *slack.MessageEvent:
 			// Skip if message posted by BotKube
@@ -104,25 +100,25 @@ func (b *SlackBot) Start() {
 			sm.HandleMessage(b)
 
 		case *slack.RTMError:
-			logging.Logger.Errorf("Slack RMT error: %+v", ev.Error())
+			log.Errorf("Slack RMT error: %+v", ev.Error())
 
 		case *slack.ConnectionErrorEvent:
-			logging.Logger.Errorf("Slack connection error: %+v", ev.Error())
+			log.Errorf("Slack connection error: %+v", ev.Error())
 
 		case *slack.IncomingEventError:
-			logging.Logger.Errorf("Slack incoming event error: %+v", ev.Error())
+			log.Errorf("Slack incoming event error: %+v", ev.Error())
 
 		case *slack.OutgoingErrorEvent:
-			logging.Logger.Errorf("Slack outgoing event error: %+v", ev.Error())
+			log.Errorf("Slack outgoing event error: %+v", ev.Error())
 
 		case *slack.UnmarshallingErrorEvent:
-			logging.Logger.Errorf("Slack unmarshalling error: %+v", ev.Error())
+			log.Errorf("Slack unmarshalling error: %+v", ev.Error())
 
 		case *slack.RateLimitedError:
-			logging.Logger.Errorf("Slack rate limiting error: %+v", ev.Error())
+			log.Errorf("Slack rate limiting error: %+v", ev.Error())
 
 		case *slack.InvalidAuthEvent:
-			logging.Logger.Error("Invalid Credentials")
+			log.Error("Invalid Credentials")
 			return
 
 		default:
@@ -131,7 +127,7 @@ func (b *SlackBot) Start() {
 }
 
 func (sm *slackMessage) HandleMessage(b *SlackBot) {
-	logging.Logger.Debugf("Slack incoming message: %+v", sm.Event)
+	log.Debugf("Slack incoming message: %+v", sm.Event)
 
 	// Check if message posted in authenticated channel
 	info, err := sm.SlackClient.GetConversationInfo(sm.Event.Channel, true)
@@ -143,14 +139,13 @@ func (sm *slackMessage) HandleMessage(b *SlackBot) {
 				return
 			}
 			// Serve only if current channel is in config
-			if b.ChannelName == info.Name {
-				sm.IsAuthChannel = true
-			}
 		}
 	}
 	// Serve only if current channel is in config
-	if b.ChannelName == sm.Event.Channel {
-		sm.IsAuthChannel = true
+	for _, AccessBind := range b.Accessbindings {
+		if AccessBind.ChannelName == sm.Event.Channel {
+			sm.IsAuthChannel = true
+		}
 	}
 
 	// Trim the @BotKube prefix
@@ -158,9 +153,7 @@ func (sm *slackMessage) HandleMessage(b *SlackBot) {
 	if len(sm.Request) == 0 {
 		return
 	}
-
-	e := execute.NewDefaultExecutor(sm.Request, b.AllowKubectl, b.RestrictAccess, b.DefaultNamespace,
-		b.ClusterName, b.ChannelName, sm.IsAuthChannel, b.Verbs, b.Resources)
+	e := execute.NewDefaultExecutor(sm.Request, b.AllowKubectl, b.RestrictAccess, b.DefaultNamespace, b.ClusterName, b.Accessbindings.ProfileValue, sm.IsAuthChannel)
 	sm.Response = e.Execute()
 	sm.Send()
 }
@@ -176,15 +169,15 @@ func (sm slackMessage) Send() {
 		}
 		_, err := sm.RTM.UploadFile(params)
 		if err != nil {
-			logging.Logger.Error("Error in uploading file:", err)
+			log.Error("Error in uploading file:", err)
 		}
 		return
 	} else if len(sm.Response) == 0 {
-		logging.Logger.Info("Invalid request. Dumping the response")
+		log.Info("Invalid request. Dumping the response")
 		return
 	}
 
 	if _, _, err := sm.RTM.PostMessage(sm.Event.Channel, slack.MsgOptionText("```"+sm.Response+"```", false), slack.MsgOptionAsUser(true)); err != nil {
-		logging.Logger.Error("Error in sending message:", err)
+		log.Error("Error in sending message:", err)
 	}
 }
