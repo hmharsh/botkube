@@ -51,22 +51,23 @@ const (
 
 // Event to store required information from k8s objects
 type Event struct {
-	Code      string
-	Title     string
-	Kind      string
-	Name      string
-	Namespace string
-	Messages  []string
-	Type      config.EventType
-	Reason    string
-	Error     string
-	Level     Level
-	Cluster   string
-	Channel   string
-	TimeStamp time.Time
-	Count     int32
-	Action    string
-	Skip      bool `json:",omitempty"`
+	Code               string
+	Title              string
+	Kind               string
+	Name               string
+	Namespace          string
+	Messages           []string
+	Type               config.EventType
+	Reason             string
+	Error              string
+	Level              Level
+	Cluster            string
+	SlackChannels      []string
+	MattermostChannels []string
+	TimeStamp          time.Time
+	Count              int32
+	Action             string
+	Skip               bool `json:",omitempty"`
 
 	Recommendations []string
 	Warnings        []string

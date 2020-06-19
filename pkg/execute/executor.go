@@ -56,7 +56,7 @@ const (
 	notifierStartMsg   = "Brace yourselves, notifications are coming from cluster '%s'."
 	notifierStopMsg    = "Sure! I won't send you notifications from cluster '%s' anymore."
 	unsupportedCmdMsg  = "Command not supported. Please run /botkubehelp to see supported commands."
-	incompleteCmdMsg   = "You missed to pass options for the command. Please run /botkubehelp to see command options."
+	incompleteCmdMsg   = "You missed to pass options for the command or you don't have access to run this command. Please run /botkubehelp to see command options."
 	kubectlDisabledMsg = "Sorry, the admin hasn't given me the permission to execute kubectl command on cluster '%s'."
 	filterNameMissing  = "You forgot to pass filter name. Please pass one of the following valid filters:\n\n%s"
 	filterEnabled      = "I have enabled '%s' filter on '%s' cluster."
@@ -74,11 +74,9 @@ type DefaultExecutor struct {
 	AllowKubectl     bool
 	RestrictAccess   bool
 	ClusterName      string
-	ChannelName      string
+	Profile          config.Profile
 	IsAuthChannel    bool
 	DefaultNamespace string
-	Verbs            []string
-	Resources        []string
 }
 
 // CommandRunner is an interface to run bash commands
@@ -132,25 +130,23 @@ func (action FiltersAction) String() string {
 }
 
 // NewDefaultExecutor returns new Executor object
-func NewDefaultExecutor(msg string, allowkubectl, restrictAccess bool, defaultNamespace,
-	clusterName, channelName string, isAuthChannel bool, verbs []string, resources []string) Executor {
+func NewDefaultExecutor(msg string, allowkubectl bool, restrictAccess bool, defaultNamespace string, clusterName string, Profile config.Profile, isAuthChannel bool) Executor {
 	return &DefaultExecutor{
 		Message:          msg,
 		AllowKubectl:     allowkubectl,
 		RestrictAccess:   restrictAccess,
 		ClusterName:      clusterName,
-		ChannelName:      channelName,
+		Profile:          Profile,
 		IsAuthChannel:    isAuthChannel,
 		DefaultNamespace: defaultNamespace,
-		Verbs:            verbs,
-		Resources:        resources,
 	}
 }
 
 // Execute executes commands and returns output
 func (e *DefaultExecutor) Execute() string {
 	args := strings.Fields(e.Message)
-	if utils.Contains(e.Verbs, args[0]) && utils.Contains(e.Resources, args[1]) {
+	// authorizeCommandByProfile check if the command is authorized kubectl command
+	if authorizeCommandByProfile(e.Profile, args) {
 		isClusterNamePresent := strings.Contains(e.Message, "--cluster-name")
 		if !e.AllowKubectl {
 			if isClusterNamePresent && e.ClusterName == utils.GetClusterNameFromKubectlCmd(e.Message) {
@@ -162,7 +158,13 @@ func (e *DefaultExecutor) Execute() string {
 			}
 			return runKubectlCommand(args, e.ClusterName, e.DefaultNamespace, e.IsAuthChannel)
 		}
+<<<<<<< HEAD
+=======
+
+		return runKubectlCommand(args, e.ClusterName, e.DefaultNamespace, e.IsAuthChannel)
+>>>>>>> Profile feature -> 1. config changes
 	}
+
 	if validNotifierCommand[args[0]] {
 		return runNotifierCommand(args, e.ClusterName, e.IsAuthChannel)
 	}
@@ -205,8 +207,6 @@ func runKubectlCommand(args []string, clusterName, defaultNamespace string, isAu
 	// run commands in namespace specified under Config.Settings.DefaultNamespace field
 	if len(defaultNamespace) != 0 {
 		args = append([]string{"-n", defaultNamespace}, utils.DeleteDoubleWhiteSpace(args)...)
-	} else {
-		args = append([]string{"-n", "default"}, utils.DeleteDoubleWhiteSpace(args)...)
 	}
 
 	// Remove unnecessary flags
@@ -398,4 +398,23 @@ func showControllerConfig() (configYaml string, err error) {
 	configYaml = string(b)
 
 	return configYaml, nil
+}
+
+// authorizeCommandByProfile function check if channel has permission to run the specific command or not based on access rules defined in corresponding profile
+func authorizeCommandByProfile(Profile config.Profile, args []string) bool {
+	authorizedCommand := false
+
+	if len(args) >= 1 {
+		allowedOperations := Profile.Kubectl.Commands.Verbs
+		if authorizedCommand = utils.Contains(allowedOperations, args[0]); !authorizedCommand {
+			return false
+		}
+	}
+	if len(args) >= 2 {
+		allowedResources := Profile.Kubectl.Commands.Resources
+		if authorizedCommand = utils.Contains(allowedResources, args[1]); !authorizedCommand {
+			return false
+		}
+	}
+	return authorizedCommand
 }

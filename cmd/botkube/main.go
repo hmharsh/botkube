@@ -42,7 +42,6 @@ func main() {
 	if err != nil {
 		log.Fatal(fmt.Sprintf("Error in loading configuration. Error:%s", err.Error()))
 	}
-
 	if conf.Communications.Slack.Enabled {
 		log.Info("Starting slack bot")
 		sb := bot.NewSlackBot(conf)
