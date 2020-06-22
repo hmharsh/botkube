@@ -6,12 +6,8 @@ communications:
     token: 'SLACK_TOKEN'
     notiftype: short                             # Change notification type short/long you want to receive. notiftype is optional and Default notification type is short (if not specified)
     accessbindings:
-        # all profiles listed under access_conf.yml to limit access
-      - channelName: 'developers'
-        profile: 'DEVELOPMENT'    
-      - channelName: 'production'
-        profile: 'PRODUCTION'
-      - channelName: 'admin'
+        # all profiles listed under access_conf.yaml to limit access
+      - channelName: 'SLACK_CHANNEL_NAME'
         profile: 'BOTKUBE_ADMIN'
   
   # Settings for Mattermost
@@ -22,12 +18,8 @@ communications:
     team: 'MATTERMOST_TEAM'			                # Mattermost Team to configure with BotKube 
     notiftype: short                            # Change notification type short/long you want to receive. notiftype is optional and Default notification type is short (if not specified)
     accessbindings:
-        # all profiles listed under access_conf.yml to limit access
-      - channelName: 'developers'
-        profile: 'DEVELOPMENT'
-      - channelName: 'production'
-        profile: 'PRODUCTION'
-      - channelName: 'admin'
+        # all profiles listed under access_conf.yaml to limit access
+      - channelName: 'MATTERMOST_CHANNEL_NAME'
         profile: 'BOTKUBE_ADMIN'
   
   # Settings for ELS

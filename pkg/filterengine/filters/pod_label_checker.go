@@ -56,7 +56,7 @@ func (f PodLabelChecker) Run(object interface{}, event *events.Event) {
 	if len(podObj.ObjectMeta.Labels) == 0 {
 		event.Recommendations = append(event.Recommendations, fmt.Sprintf("pod '%s' creation without labels should be avoided.", podObj.ObjectMeta.Name))
 	}
-	log.Logger.Debug("Pod label filter successful!")
+	log.Debug("Pod label filter successful!")
 }
 
 // Describe filter

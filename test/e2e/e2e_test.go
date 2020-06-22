@@ -45,10 +45,10 @@ func TestRun(t *testing.T) {
 
 	if testEnv.Config.Communications.Slack.Enabled {
 		fakeSlackNotifier := &notify.Slack{
-			Token:     testEnv.Config.Communications.Slack.Token,
-			Channel:   testEnv.Config.Communications.Slack.Channel,
-			NotifType: testEnv.Config.Communications.Slack.NotifType,
-			SlackURL:  testEnv.SlackServer.GetAPIURL(),
+			Token:          testEnv.Config.Communications.Slack.Token,
+			AccessBindings: testEnv.Config.Communications.Slack.AccessBindings,
+			NotifType:      testEnv.Config.Communications.Slack.NotifType,
+			SlackURL:       testEnv.SlackServer.GetAPIURL(),
 		}
 
 		notifiers = append(notifiers, fakeSlackNotifier)
@@ -63,7 +63,8 @@ func TestRun(t *testing.T) {
 	}
 
 	utils.KubeClient = testEnv.K8sClient
-	utils.InitInformerMap()
+	utils.InitInformerMap(testEnv.Config)
+	utils.InitResourceMap(testEnv.Config)
 
 	// Start controller with fake notifiers
 	go controller.RegisterInformers(testEnv.Config, notifiers)
@@ -100,7 +101,7 @@ func StartFakeSlackBot(testenv *env.TestEnv) {
 			AllowKubectl:     testenv.Config.Settings.Kubectl.Enabled,
 			RestrictAccess:   testenv.Config.Settings.Kubectl.RestrictAccess,
 			ClusterName:      testenv.Config.Settings.ClusterName,
-			ChannelName:      testenv.Config.Communications.Slack.Channel,
+			AccessBindings:   testenv.Config.Communications.Slack.AccessBindings,
 			SlackURL:         testenv.SlackServer.GetAPIURL(),
 			BotID:            testenv.SlackServer.BotID,
 			DefaultNamespace: testenv.Config.Settings.Kubectl.DefaultNamespace,

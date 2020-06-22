@@ -20,10 +20,10 @@
 package utils
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/infracloudio/botkube/pkg/config"
@@ -46,8 +46,15 @@ var (
 	ResourceInformerMap map[string]cache.SharedIndexInformer
 	// AllowedEventKindsMap is a map to filter valid event kinds
 	AllowedEventKindsMap map[EventKind]bool
-	// AllowedUpdateEventsMap is a map of resourceand namespace to updateconfig
+	// AllowedUpdateEventsMap is a map of resource and namespace to updateconfig
 	AllowedUpdateEventsMap map[KindNS]config.UpdateSetting
+
+	// KindResourceMap contains resource name to kind mapping
+	// AllowedKubectlVerbMap is map of allowed verb with kubectl command
+	AllowedKubectlVerbMap map[string]bool
+	KindResourceMap       map[string]string
+	// ShortnameResourceMap contains resource name to short name mapping
+	ShortnameResourceMap map[string]string
 	// KubeClient is a global kubernetes client to communicate to apiserver
 	KubeClient kubernetes.Interface
 	// KubeInformerFactory is a global SharedInformerFactory object to watch resources
@@ -92,12 +99,7 @@ type KindNS struct {
 }
 
 // InitInformerMap initializes helper maps to filter events
-func InitInformerMap() {
-	conf, err := config.New()
-	if err != nil {
-		log.Fatal(fmt.Sprintf("Error in loading configuration. Error:%s", err.Error()))
-	}
-
+func InitInformerMap(conf *config.Config) {
 	// Get resync period
 	rsyncTimeStr, ok := os.LookupEnv("INFORMERS_RESYNC_PERIOD")
 	if !ok {
@@ -423,12 +425,48 @@ func ExtractAnnotaions(obj *coreV1.Event) map[string]string {
 	return map[string]string{}
 }
 
+// InitResourceMap initializes helper maps to allow kubectl execution for required resources
+func InitResourceMap(conf *config.Config) {
+	if !conf.Settings.Kubectl.Enabled {
+		return
+	}
+	KindResourceMap = make(map[string]string)
+	ShortnameResourceMap = make(map[string]string)
+
+	AllowedKubectlVerbMap = make(map[string]bool)
+
+	for _, r := range conf.Settings.Kubectl.Commands.Verbs {
+		AllowedKubectlVerbMap[r] = true
+	}
+
+	resourceList, err := KubeClient.Discovery().ServerResources()
+	if err != nil {
+		log.Errorf("Failed to get resource list in k8s cluster. %v", err)
+		return
+	}
+	for _, resource := range resourceList {
+		for _, r := range resource.APIResources {
+			// Ignore subresources
+			if strings.Contains(r.Name, "/") {
+				continue
+			}
+			KindResourceMap[strings.ToLower(r.Kind)] = r.Name
+			for _, sn := range r.ShortNames {
+				ShortnameResourceMap[sn] = r.Name
+			}
+		}
+	}
+	log.Infof("AllowedKubectlVerbMap - %+v", AllowedKubectlVerbMap)
+	log.Infof("KindResourceMap - %+v", KindResourceMap)
+	log.Infof("ShortnameResourceMap - %+v", ShortnameResourceMap)
+}
+
 //GetClusterNameFromKubectlCmd this will return cluster name from kubectl command
 func GetClusterNameFromKubectlCmd(cmd string) string {
 	r, _ := regexp.Compile(`--cluster-name[=|' ']([^\s]*)`)
 	//this gives 2 match with cluster name and without
 	matchedArray := r.FindStringSubmatch(cmd)
-	var s string
+	s := ""
 	if len(matchedArray) >= 2 {
 		s = matchedArray[1]
 	}
@@ -438,9 +476,28 @@ func GetClusterNameFromKubectlCmd(cmd string) string {
 // Contains tells whether a contains x.
 func Contains(a []string, x string) bool {
 	for _, n := range a {
-		if x == n {
+		if strings.ToLower(x) == strings.ToLower(n) {
 			return true
 		}
 	}
 	return false
+}
+
+func GetAllChannels(accessBindings *[]config.AccessBinding) []string {
+	allChannels := []string{}
+	for _, accessBind := range *accessBindings {
+		allChannels = append(allChannels, accessBind.ChannelName)
+	}
+	return allChannels
+}
+
+func FormatProfile(profile *string) error {
+	profileValue := *profile
+	// Remove the last two default key value from the each profile value (Kubectl struct)
+	eliminate1 := `defaultnamespace: ""`
+	eliminate2 := `restrictAccess: false`
+	profileValue = strings.ReplaceAll(profileValue, eliminate1, "")
+	profileValue = strings.ReplaceAll(profileValue, eliminate2, "")
+	*profile = profileValue
+	return nil
 }

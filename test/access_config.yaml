@@ -20,9 +20,9 @@ profiles:
       enabled: true
       commands:
         # method which are allowed
-        verbs: ["get", "logs"]
+        verbs: ["get", "logs"]   # pod is removed to test permission denaied message
         # resource configuration which is allowed
-        resources: ["deployments", "pods", "services"]
+        resources: ["deployments", "services"]
      
            
    
