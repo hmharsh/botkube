@@ -216,7 +216,7 @@ settings:
     # set Namespace to execute botkube kubectl commands by default
     defaultNamespace: default
     # Set true to enable commands execution from configured channel only
-    restrictAccess: true
+    restrictAccess: false
   # Set true to enable config watcher
   configwatcher: false
   # Set false to disable upgrade notification
