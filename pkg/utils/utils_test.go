@@ -68,6 +68,10 @@ func TestContainsMethod(t *testing.T) {
 		array: []string{"get", "logs"},
 		value: "describe",
 	}
+	input3 := input{
+		array: []string{"get", "Logs"},
+		value: "logs",
+	}
 	tests := []test{
 		{
 			input:    input1,
@@ -76,6 +80,10 @@ func TestContainsMethod(t *testing.T) {
 		{
 			input:    input2,
 			expected: false,
+		},
+		{
+			input:    input3,
+			expected: true,
 		},
 	}
 
