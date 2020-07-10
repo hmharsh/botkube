@@ -129,10 +129,10 @@ type AccessBinding struct {
 
 // Profile defines access limititation for a specific channel
 type Profile struct {
-	Name                       string
-	Namespaces                 []string `yaml:"namespaces"`
-	Kubectl                    Kubectl
-	AllowedKubectlResourceMap  map[string]bool
+	Name                      string
+	Namespaces                []string `yaml:"namespaces"`
+	Kubectl                   Kubectl
+	AllowedKubectlResourceMap map[string]bool
 }
 
 // AllProfiles contain all defined profiles
@@ -150,7 +150,7 @@ func (all AllProfiles) getProfile(profileName string) (Profile, error) {
 				allowedKubectlResourceMap[r] = true
 			}
 			profile.AllowedKubectlResourceMap = allowedKubectlResourceMap
-      p = profile
+			p = profile
 			return p, nil
 		}
 	}

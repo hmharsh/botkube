@@ -505,9 +505,9 @@ func authorizeCommandByProfile(Profile config.Profile, args []string) bool {
 		}
 
 		if validDebugCommands[args[0]] || // Don't check for resource if is a valid debug command
-		Profile.AllowedKubectlResourceMap[args[1]] || // Check if allowed resource
-		Profile.AllowedKubectlResourceMap[utils.KindResourceMap[strings.ToLower(args[1])]] || // Check if matches with kind name
-		Profile.AllowedKubectlResourceMap[utils.ShortnameResourceMap[strings.ToLower(args[1])]] { // Check if matches with short name
+			Profile.AllowedKubectlResourceMap[args[1]] || // Check if allowed resource
+			Profile.AllowedKubectlResourceMap[utils.KindResourceMap[strings.ToLower(args[1])]] || // Check if matches with kind name
+			Profile.AllowedKubectlResourceMap[utils.ShortnameResourceMap[strings.ToLower(args[1])]] { // Check if matches with short name
 			return true
 		}
 		return false

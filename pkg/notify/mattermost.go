@@ -32,29 +32,22 @@ import (
 
 // Mattermost contains server URL and token
 type Mattermost struct {
-	Client    *model.Client4
-	Channel   string
-	NotifType config.NotifType
+	AccessBindings  []config.AccessBinding
+	NotifType       config.NotifType
+	BotChannel      string
+	MattermostUrl   string
+	MattermostToken string
+	MattermostTeam  string
 }
 
 // NewMattermost returns new Mattermost object
 func NewMattermost(c *config.Config) (Notifier, error) {
-	// Set configurations for Mattermost server
-	client := model.NewAPIv4Client(c.Communications.Mattermost.URL)
-	client.SetOAuthToken(c.Communications.Mattermost.Token)
-	botTeam, resp := client.GetTeamByName(c.Communications.Mattermost.Team, "")
-	if resp.Error != nil {
-		return nil, resp.Error
-	}
-	botChannel, resp := client.GetChannelByName(c.Communications.Mattermost.Channel, botTeam.Id, "")
-	if resp.Error != nil {
-		return nil, resp.Error
-	}
-
 	return &Mattermost{
-		Client:    client,
-		Channel:   botChannel.Id,
-		NotifType: c.Communications.Mattermost.NotifType,
+		AccessBindings:  c.Communications.Mattermost.AccessBindings,
+		NotifType:       c.Communications.Mattermost.NotifType,
+		MattermostUrl:   c.Communications.Mattermost.URL,
+		MattermostToken: c.Communications.Mattermost.Token,
+		MattermostTeam:  c.Communications.Mattermost.Team,
 	}, nil
 }
 
@@ -90,43 +83,54 @@ func (m *Mattermost) SendEvent(event events.Event) error {
 		"attachments": attachment,
 	}
 
-	// non empty value in event.channel demands redirection of events to a different channel
-	if event.Channel != "" {
-		post.ChannelId = event.Channel
+	client := model.NewAPIv4Client(m.MattermostUrl)
+	client.SetOAuthToken(m.MattermostToken)
+	botTeam, resp := client.GetTeamByName(m.MattermostTeam, "")
+	if resp.Error != nil {
+		return resp.Error
+	}
 
-		if _, resp := m.Client.CreatePost(post); resp.Error != nil {
-			log.Error("Failed to send message. Error: ", resp.Error)
-			// send error message to default channel
-			msg := fmt.Sprintf("Unable to send message to Channel `%s`: `%s`\n```add Botkube app to the Channel %s\nMissed events follows below:```", event.Channel, resp.Error, event.Channel)
-			go m.SendMessage(msg)
-			// sending missed event to default channel
-			// reset event.Channel and send event
-			event.Channel = ""
-			go m.SendEvent(event)
-			return resp.Error
-		}
-		log.Debugf("Event successfully sent to channel %s", post.ChannelId)
-	} else {
-		post.ChannelId = m.Channel
-		// empty value in event.channel sends notifications to default channel.
-		if _, resp := m.Client.CreatePost(post); resp.Error != nil {
-			log.Error("Failed to send message. Error: ", resp.Error)
-			return resp.Error
-		}
-		log.Debugf("Event successfully sent to channel %s", post.ChannelId)
+	if len(event.MattermostChannels) == 0 {
+		// send to all configured channel
+		event.MattermostChannels = m.getAllConfiguredChannel()
+	}
+	botTeamId := botTeam.Id
+	for _, channel := range event.MattermostChannels {
+		go postMattermostMessage(client, channel, botTeamId, post)
 	}
 	return nil
 }
 
 // SendMessage sends message to Mattermost channel
 func (m *Mattermost) SendMessage(msg string) error {
+	// Set configurations for Mattermost server
+	client := model.NewAPIv4Client(m.MattermostUrl)
+	client.SetOAuthToken(m.MattermostToken)
+	botTeam, resp := client.GetTeamByName(m.MattermostTeam, "")
+	if resp.Error != nil {
+		return resp.Error
+	}
+	botTeamId := botTeam.Id
 	post := &model.Post{}
-	post.ChannelId = m.Channel
 	post.Message = msg
-	if _, resp := m.Client.CreatePost(post); resp.Error != nil {
-		log.Error("Failed to send message. Error: ", resp.Error)
+	for _, channel := range m.getAllConfiguredChannel() {
+		go postMattermostMessage(client, channel, botTeamId, post)
 	}
 	return nil
+}
+
+func postMattermostMessage(client *model.Client4, channel string, botTeamId string, post *model.Post) {
+	botChannel, resp := client.GetChannelByName(channel, botTeamId, "")
+
+	if resp.Error != nil {
+		log.Errorf("Unable to find the channel %v in mattermost", channel)
+		return
+	}
+	post.ChannelId = botChannel.Id
+	if _, resp := client.CreatePost(post); resp.Error != nil {
+		log.Error("Failed to send message. Error: ", resp.Error)
+	}
+	log.Debugf("Event successfully sent to mattermost channel %s", post.ChannelId)
 }
 
 func mmLongNotification(event events.Event) []*model.SlackAttachmentField {
@@ -214,4 +218,16 @@ func mmShortNotification(event events.Event) []*model.SlackAttachmentField {
 			Value: formatShortMessage(event),
 		},
 	}
+}
+
+// getAllConfiguredChannel return all the channels configured under AccessBinding
+func (m *Mattermost) getAllConfiguredChannel() []string {
+	var allChannels []string
+	for _, accessBinding := range m.AccessBindings {
+		allChannels = append(allChannels, accessBinding.ChannelName)
+	}
+	if len(allChannels) == 0 {
+		log.Infof("No channel name found from profiles corresponds to AccessBindings for Mattermost")
+	}
+	return allChannels
 }
